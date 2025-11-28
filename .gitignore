@@ -1,0 +1,10 @@
+# Go build outputs
+bin/
+*.exe
+*.out
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
