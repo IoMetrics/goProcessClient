@@ -23,11 +23,12 @@ type LoginResponse struct {
 	AccessToken  string `json:"accessToken"`
 	RefreshToken string `json:"refreshToken,omitempty"`
 	ExpiresIn    int64  `json:"expiresIn,omitempty"`
+	DbInfo       DbInfo `json:"db_info,omitempty"`
 }
 
 // UserClaims são os dados que vão dentro do JWT (access token).
 type UserClaims struct {
-	Cod     int    `json:"cod"`
+	Cod     string `json:"cod"`
 	Usuario string `json:"usuario"`
 	jwt.RegisteredClaims
 }

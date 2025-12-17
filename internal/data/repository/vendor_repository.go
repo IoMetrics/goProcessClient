@@ -10,12 +10,11 @@ import (
 )
 
 // BuscarUsuarios busca os vendedores + nível no banco AUTOCOM
-func BuscarUsuarios(cfg *configdm.WSConfig) ([]configdm.Vendor, error) {
-	dbAutocom, err := dbpkg.OpenAutocomDB(cfg)
-	if err != nil {
-		return nil, err
+func BuscarUsuarios() ([]configdm.UserInfo, error) {
+	dbRemote := dbpkg.GetRemoteDB()
+	if dbRemote == nil {
+		return nil, fmt.Errorf("base remota não inicializada (GetRemoteDB=nil)")
 	}
-	defer dbAutocom.Close()
 
 	const sqlVendedores = `
 		SELECT a.cod, a.nome, a.usuario, b.nivel
@@ -23,16 +22,16 @@ func BuscarUsuarios(cfg *configdm.WSConfig) ([]configdm.Vendor, error) {
 		JOIN senhas b ON a.usuario = b.usuario
 	`
 
-	rows, err := dbAutocom.Query(sqlVendedores)
+	rows, err := dbRemote.Query(sqlVendedores)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao executar select de vendedores: %w", err)
 	}
 	defer rows.Close()
 
-	var lista []configdm.Vendor
+	var lista []configdm.UserInfo
 	for rows.Next() {
-		var v configdm.Vendor
-		if err := rows.Scan(&v.Cod, &v.Nome, &v.Usuario, &v.Nivel); err != nil {
+		var v configdm.UserInfo
+		if err := rows.Scan(&v.ID, &v.Name, &v.Username, &v.Level); err != nil {
 			return nil, fmt.Errorf("erro ao ler linha de vendedores: %w", err)
 		}
 		lista = append(lista, v)
@@ -46,12 +45,11 @@ func BuscarUsuarios(cfg *configdm.WSConfig) ([]configdm.Vendor, error) {
 }
 
 // BuscarUsuarioPorLogin valida usuario + senha no Autocom
-func BuscarUsuarioPorLogin(cfg *configdm.WSConfig, usuario, senha string) (*configdm.Vendor, error) {
-	dbAutocom, err := dbpkg.OpenAutocomDB(cfg)
-	if err != nil {
-		return nil, err
+func BuscarUsuarioPorLogin(usuario, senha string) (*configdm.UserInfo, error) {
+	dbRemote := dbpkg.GetRemoteDB()
+	if dbRemote == nil {
+		return nil, fmt.Errorf("base remota não inicializada (GetRemoteDB=nil)")
 	}
-	defer dbAutocom.Close()
 
 	const sqlUsuario = `
         SELECT a.cod, a.nome, a.usuario, b.nivel
@@ -60,9 +58,9 @@ func BuscarUsuarioPorLogin(cfg *configdm.WSConfig, usuario, senha string) (*conf
         WHERE b.usuario = ? AND b.senha = ?
     `
 
-	var v configdm.Vendor
-	err = dbAutocom.QueryRow(sqlUsuario, usuario, senha).Scan(
-		&v.Cod, &v.Nome, &v.Usuario, &v.Nivel,
+	var v configdm.UserInfo
+	err := dbRemote.QueryRow(sqlUsuario, usuario, senha).Scan(
+		&v.ID, &v.Name, &v.Username, &v.Level,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -75,12 +73,11 @@ func BuscarUsuarioPorLogin(cfg *configdm.WSConfig, usuario, senha string) (*conf
 }
 
 // BuscarUsuarioCod busca o usuário apenas pelo código
-func BuscarUsuarioCod(cfg *configdm.WSConfig, cod string) (*configdm.Vendor, error) {
-	dbAutocom, err := dbpkg.OpenAutocomDB(cfg)
-	if err != nil {
-		return nil, err
+func BuscarUsuarioCod(cod string) (*configdm.UserInfo, error) {
+	dbRemote := dbpkg.GetRemoteDB()
+	if dbRemote == nil {
+		return nil, fmt.Errorf("base remota não inicializada (GetRemoteDB=nil)")
 	}
-	defer dbAutocom.Close()
 
 	const sqlUsuario = `
         SELECT a.cod, a.nome, a.usuario, b.nivel
@@ -88,10 +85,9 @@ func BuscarUsuarioCod(cfg *configdm.WSConfig, cod string) (*configdm.Vendor, err
         JOIN senhas b ON a.usuario = b.usuario
         WHERE a.cod = ?
     `
-
-	var v configdm.Vendor
-	err = dbAutocom.QueryRow(sqlUsuario, cod).Scan(
-		&v.Cod, &v.Nome, &v.Usuario, &v.Nivel,
+	var v configdm.UserInfo
+	err := dbRemote.QueryRow(sqlUsuario, cod).Scan(
+		&v.ID, &v.Name, &v.Username, &v.Level,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -101,4 +97,96 @@ func BuscarUsuarioCod(cfg *configdm.WSConfig, cod string) (*configdm.Vendor, err
 	}
 
 	return &v, nil
+}
+
+// -------------------------
+// Catálogo (produtos/grupos)
+// -------------------------
+
+// BuscarProdutos carrega o catálogo de produtos no banco AUTOCOM
+func BuscarProdutos() ([]configdm.ProductDTO, error) {
+	dbRemote := dbpkg.GetRemoteDB()
+	if dbRemote == nil {
+		return nil, fmt.Errorf("base remota não inicializada (GetRemoteDB=nil)")
+	}
+
+	// Ajuste a query para o schema real do AUTOCOM
+	const sqlProdutos = `
+		SELECT
+			cod,
+			descricao,
+			valor,
+			grupo,
+			detalhes,
+			unidade
+		FROM produtos where isvendamobilesemestoque="1" 
+	`
+
+	rows, err := dbRemote.Query(sqlProdutos)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao executar select de produtos: %w", err)
+	}
+	defer rows.Close()
+
+	var lista []configdm.ProductDTO
+	for rows.Next() {
+		var p configdm.ProductDTO
+		if err := rows.Scan(
+			&p.Product,
+			&p.Description,
+			&p.Value,
+			&p.GroupId,
+			&p.Details,
+			&p.Unit,
+		); err != nil {
+			return nil, fmt.Errorf("erro ao ler linha de produtos: %w", err)
+		}
+		lista = append(lista, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("erro no cursor de produtos: %w", err)
+	}
+
+	return lista, nil
+}
+
+// BuscarGruposProdutos carrega os grupos de produtos no banco AUTOCOM
+func BuscarGruposProdutos() ([]configdm.ProductGroupDTO, error) {
+	dbRemote := dbpkg.GetRemoteDB()
+	if dbRemote == nil {
+		return nil, fmt.Errorf("base remota não inicializada (GetRemoteDB=nil)")
+	}
+
+	// Ajuste a query para a tabela real de grupos no AUTOCOM
+	const sqlGrupos = `
+		SELECT
+			codigo,
+			descricao
+		FROM grupo
+	`
+
+	rows, err := dbRemote.Query(sqlGrupos)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao executar select de grupos de produtos: %w", err)
+	}
+	defer rows.Close()
+
+	var lista []configdm.ProductGroupDTO
+	for rows.Next() {
+		var g configdm.ProductGroupDTO
+		if err := rows.Scan(
+			&g.Id,
+			&g.Description,
+		); err != nil {
+			return nil, fmt.Errorf("erro ao ler linha de grupos de produtos: %w", err)
+		}
+		lista = append(lista, g)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("erro no cursor de grupos de produtos: %w", err)
+	}
+
+	return lista, nil
 }

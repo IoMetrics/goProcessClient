@@ -1,6 +1,6 @@
 # goProcessClient
 
-API em Go para autenticação e roteamento de dados  para aplicativos  (modelo genérico para apps mobile).
+API em Go para autenticação e roteamento de dados  para  (modelo genérico para apps mobile).
 
 ## Tecnologias
 

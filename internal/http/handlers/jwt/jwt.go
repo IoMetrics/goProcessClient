@@ -12,15 +12,15 @@ import (
 )
 
 // GenerateTokens gera access + refresh tokens para um Vendor
-func GenerateTokens(v domain.Vendor) (domain.LoginResponse, error) {
+func GenerateTokens(v domain.UserInfo) (domain.LoginResponse, error) {
 	// 60 minutos para o access token (ajuste se quiser)
 	accessExpiresAt := time.Now().Add(60 * time.Minute)
 
 	accessClaims := &domain.UserClaims{
-		Cod:     v.Cod,
-		Usuario: v.Usuario,
+		Cod:     v.ID,
+		Usuario: v.Username,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   fmt.Sprintf("%d", v.Cod),
+			Subject:   fmt.Sprintf("%d", v.ID),
 			ExpiresAt: jwt.NewNumericDate(accessExpiresAt),
 			Issuer:    "goProcessClient",
 		},
@@ -35,7 +35,7 @@ func GenerateTokens(v domain.Vendor) (domain.LoginResponse, error) {
 	// Refresh token de 7 dias
 	refreshExpiresAt := time.Now().Add(7 * 24 * time.Hour)
 	refreshClaims := &jwt.RegisteredClaims{
-		Subject:   fmt.Sprintf("%d", v.Cod),
+		Subject:   fmt.Sprintf("%d", v.ID),
 		ExpiresAt: jwt.NewNumericDate(refreshExpiresAt),
 		Issuer:    "goProcessClient",
 	}
